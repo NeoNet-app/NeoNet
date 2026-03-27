@@ -1,0 +1,12 @@
+[daemon]
+log_level = "info"
+
+[network]
+mode        = "rendezvous"
+listen_port = 7777
+
+[identity]
+keystore = "/data/keystore"
+
+[storage]
+db_path = "/data/neonet.db"

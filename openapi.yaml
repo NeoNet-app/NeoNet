@@ -1,0 +1,1152 @@
+openapi: 3.1.0
+info:
+  title: NeoNet Client API
+  version: 0.1.0
+  description: |
+    Local REST + WebSocket API exposed by the `neonet-node` daemon on
+    `127.0.0.1:7780` (default).
+
+    The daemon decrypts all payloads — client apps receive clear JSON and
+    never handle cryptographic keys directly.
+  license:
+    name: AGPL-3.0-or-later
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+
+servers:
+  - url: http://127.0.0.1:7780
+    description: Local daemon (default port)
+
+security:
+  - BearerToken: []
+
+tags:
+  - name: Identity
+    description: Local node identity and signing.
+  - name: Rooms
+    description: Room lifecycle (create, list, update, delete).
+  - name: Messages
+    description: DAG events within a room.
+  - name: Members
+    description: Room membership management.
+  - name: Files
+    description: Encrypted file upload and download.
+  - name: Peers
+    description: Connected peers and DHT state.
+  - name: WebSocket
+    description: Real-time event streaming.
+
+# ─────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Identity ────────────────────────────────────────────────────────
+
+  /v1/identity:
+    get:
+      operationId: getIdentity
+      tags: [Identity]
+      summary: Get local node identity.
+      responses:
+        "200":
+          description: Node identity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/identity/sign:
+    post:
+      operationId: signPayload
+      tags: [Identity]
+      summary: Sign an arbitrary payload with the local private key.
+      description: The private key never leaves the daemon.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignRequest"
+      responses:
+        "200":
+          description: Signature produced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Rooms ───────────────────────────────────────────────────────────
+
+  /v1/rooms:
+    get:
+      operationId: listRooms
+      tags: [Rooms]
+      summary: List all rooms the node is a member of.
+      responses:
+        "200":
+          description: Room list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rooms]
+                properties:
+                  rooms:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RoomSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createRoom
+      tags: [Rooms]
+      summary: Create a new room with initial members.
+      description: |
+        For `"direct"`: exactly 1 member in the list (+ self = 2).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoomRequest"
+      responses:
+        "200":
+          description: Room created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateRoomResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/rooms/{room_id}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+
+    get:
+      operationId: getRoom
+      tags: [Rooms]
+      summary: Get full room state.
+      responses:
+        "200":
+          description: Room detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      operationId: patchRoom
+      tags: [Rooms]
+      summary: Update room metadata (Admin/Owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchRoomRequest"
+      responses:
+        "200":
+          description: Room updated.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteRoom
+      tags: [Rooms]
+      summary: Leave a room. Owner deletes for everyone.
+      responses:
+        "200":
+          description: Left / deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Messages ────────────────────────────────────────────────────────
+
+  /v1/rooms/{room_id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+
+    get:
+      operationId: listMessages
+      tags: [Messages]
+      summary: List messages with cursor-based pagination.
+      description: The daemon decrypts all payloads before returning.
+      parameters:
+        - name: since
+          in: query
+          description: Events after this event ID (exclusive).
+          schema:
+            type: string
+        - name: before
+          in: query
+          description: Events before this event ID (exclusive).
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of messages (max 200).
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+      responses:
+        "200":
+          description: Message list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages, has_more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DagEvent"
+                  has_more:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      operationId: sendMessage
+      tags: [Messages]
+      summary: Send a message to a room.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "200":
+          description: Message created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendMessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/rooms/{room_id}/messages/{event_id}/react:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/EventId"
+    post:
+      operationId: react
+      tags: [Messages]
+      summary: Add a reaction to a message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReactRequest"
+      responses:
+        "200":
+          description: Reaction created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event_id]
+                properties:
+                  event_id:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/rooms/{room_id}/messages/{event_id}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/EventId"
+
+    patch:
+      operationId: editMessage
+      tags: [Messages]
+      summary: Edit a message (author only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditMessageRequest"
+      responses:
+        "200":
+          description: Edit event created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event_id]
+                properties:
+                  event_id:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteMessage
+      tags: [Messages]
+      summary: Delete a message (author or Admin/Owner).
+      responses:
+        "200":
+          description: Redact event created.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Members ─────────────────────────────────────────────────────────
+
+  /v1/rooms/{room_id}/members:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+
+    post:
+      operationId: inviteMember
+      tags: [Members]
+      summary: Invite a member (Admin/Owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteMemberRequest"
+      responses:
+        "200":
+          description: Member invited.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/rooms/{room_id}/members/{address}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - name: address
+        in: path
+        required: true
+        description: "NeoNet address (`@pubkey:domain`)."
+        schema:
+          type: string
+
+    patch:
+      operationId: changeRole
+      tags: [Members]
+      summary: Change a member's role (Admin/Owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeRoleRequest"
+      responses:
+        "200":
+          description: Role changed.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: kickMember
+      tags: [Members]
+      summary: Kick a member (Admin/Owner only).
+      responses:
+        "200":
+          description: Member removed.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Files ───────────────────────────────────────────────────────────
+
+  /v1/rooms/{room_id}/files:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+
+    post:
+      operationId: uploadFile
+      tags: [Files]
+      summary: Upload a file (encrypted with room_key by the daemon).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, filename]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                filename:
+                  type: string
+      responses:
+        "200":
+          description: File uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadFileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/rooms/{room_id}/files/{file_id}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: downloadFile
+      tags: [Files]
+      summary: Download and decrypt a file.
+      responses:
+        "200":
+          description: Decrypted file bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Peers ───────────────────────────────────────────────────────────
+
+  /v1/peers:
+    get:
+      operationId: listPeers
+      tags: [Peers]
+      summary: List connected peers and DHT state.
+      responses:
+        "200":
+          description: Network status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeersResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/peers/rendezvous:
+    get:
+      operationId: listRendezvous
+      tags: [Peers]
+      summary: List configured rendezvous nodes and their status.
+      responses:
+        "200":
+          description: Rendezvous list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RendezvousResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── WebSocket ───────────────────────────────────────────────────────
+
+  /v1/ws:
+    get:
+      operationId: websocket
+      tags: [WebSocket]
+      summary: Real-time event stream via WebSocket.
+      description: |
+        Upgrade to WebSocket with `Authorization: Bearer <token>`.
+
+        One global WebSocket per app. After connecting, send `subscribe`
+        messages to select which rooms to follow. The daemon pushes events
+        for subscribed rooms only.
+
+        **Client messages:** `WsSubscribe`, `WsUnsubscribe`
+        **Server messages:** `WsNewMessage`, `WsMessageEdited`,
+        `WsMessageDeleted`, `WsReaction`, `WsPresenceUpdate`,
+        `WsMemberJoined`, `WsMemberLeft`, `WsRoomUpdated`, `WsSyncStatus`
+      responses:
+        "101":
+          description: WebSocket upgrade successful.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# ─────────────────────────────────────────────────────────────────────
+# Components
+# ─────────────────────────────────────────────────────────────────────
+components:
+
+  # ── Security ────────────────────────────────────────────────────────
+  securitySchemes:
+    BearerToken:
+      type: http
+      scheme: bearer
+      description: |
+        Session token generated at daemon startup and written to
+        `~/.neonet/session.token` (chmod 600). Rotated on every restart.
+
+  # ── Parameters ──────────────────────────────────────────────────────
+  parameters:
+    RoomId:
+      name: room_id
+      in: path
+      required: true
+      description: BASE64URL-encoded room ID (blake3 hash).
+      schema:
+        type: string
+    EventId:
+      name: event_id
+      in: path
+      required: true
+      description: BASE64URL-encoded event ID (blake3 hash).
+      schema:
+        type: string
+
+  # ── Error responses ─────────────────────────────────────────────────
+  responses:
+    BadRequest:
+      description: "400 — Missing or invalid parameters."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            error: bad_request
+            message: Missing or invalid parameters
+    Unauthorized:
+      description: "401 — Missing or invalid session token."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            error: unauthorized
+            message: Missing or invalid session token
+    Forbidden:
+      description: "403 — ACL violation."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            error: forbidden
+            message: Action not authorized
+    NotFound:
+      description: "404 — Resource not found."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            error: not_found
+            message: Resource not found
+    Conflict:
+      description: "409 — State conflict."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            error: conflict
+            message: Member already present
+    InternalError:
+      description: "500 — Internal daemon error."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            error: internal_error
+            message: Unexpected error
+    NotReady:
+      description: "503 — Daemon not yet bootstrapped."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+          example:
+            error: not_ready
+            message: Daemon is still bootstrapping
+
+  # ── Schemas ─────────────────────────────────────────────────────────
+  schemas:
+
+    # ── Common ──────────────────────────────────────────────────────
+
+    ApiError:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Machine-readable snake_case error code.
+        message:
+          type: string
+          description: Human-readable description.
+
+    NodeType:
+      type: string
+      enum: [full, relay, light]
+
+    RoomType:
+      type: string
+      enum: [direct, group, channel, thread]
+
+    Role:
+      type: string
+      enum: [owner, admin, member, guest]
+
+    EventKind:
+      type: string
+      enum: [message, reaction, thread_reply, edit, redact, file, genesis]
+
+    PresenceStatus:
+      type: string
+      enum: [online, away, offline]
+
+    SyncStatus:
+      type: string
+      enum: [syncing, synced, error]
+
+    # ── Identity ────────────────────────────────────────────────────
+
+    IdentityResponse:
+      type: object
+      required: [pubkey, address, node_type]
+      properties:
+        pubkey:
+          type: string
+          description: "`ed25519:BASE64URL` encoded public key."
+          example: "ed25519:ABC123..."
+        address:
+          type: string
+          description: "NeoNet address `@pubkey:domain`."
+          example: "@ABC123...:mondomaine.com"
+        node_type:
+          $ref: "#/components/schemas/NodeType"
+
+    SignRequest:
+      type: object
+      required: [payload]
+      properties:
+        payload:
+          type: string
+          description: BASE64URL-encoded bytes to sign.
+
+    SignResponse:
+      type: object
+      required: [sig, pubkey]
+      properties:
+        sig:
+          type: string
+          description: "`ed25519:BASE64URL` encoded signature."
+        pubkey:
+          type: string
+          description: "`ed25519:BASE64URL` encoded public key."
+
+    # ── Rooms ───────────────────────────────────────────────────────
+
+    RoomSummary:
+      type: object
+      required: [room_id, room_type, name]
+      properties:
+        room_id:
+          type: string
+        room_type:
+          $ref: "#/components/schemas/RoomType"
+        name:
+          type: string
+        description:
+          type: string
+        member_count:
+          type: integer
+        unread_count:
+          type: integer
+        last_event_id:
+          type: string
+        last_event_ts:
+          type: integer
+          description: Unix timestamp (seconds).
+
+    CreateRoomRequest:
+      type: object
+      required: [name, room_type]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        room_type:
+          $ref: "#/components/schemas/RoomType"
+        members:
+          type: array
+          items:
+            type: string
+          description: "NeoNet addresses of initial members."
+
+    CreateRoomResponse:
+      type: object
+      required: [room_id, room_type, name, created_at]
+      properties:
+        room_id:
+          type: string
+        room_type:
+          $ref: "#/components/schemas/RoomType"
+        name:
+          type: string
+        created_at:
+          type: integer
+
+    RoomDetail:
+      type: object
+      required: [room_id, room_type, name, members, settings, created_at]
+      properties:
+        room_id:
+          type: string
+        room_type:
+          $ref: "#/components/schemas/RoomType"
+        name:
+          type: string
+        description:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/MemberInfo"
+        settings:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: integer
+
+    PatchRoomRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    MemberInfo:
+      type: object
+      required: [address, role, joined_at]
+      properties:
+        address:
+          type: string
+          description: "NeoNet address `@pubkey:domain`."
+        role:
+          $ref: "#/components/schemas/Role"
+        joined_at:
+          type: integer
+        presence:
+          $ref: "#/components/schemas/PresenceStatus"
+
+    # ── Messages ────────────────────────────────────────────────────
+
+    DagEvent:
+      type: object
+      required: [event_id, kind, content, parents, ts_hint, edited, redacted]
+      properties:
+        event_id:
+          type: string
+        author:
+          type: string
+          description: "NeoNet address. Null in anonymous mode."
+        kind:
+          $ref: "#/components/schemas/EventKind"
+        content:
+          type: object
+          additionalProperties: true
+          description: Decrypted event payload (type depends on `kind`).
+        parents:
+          type: array
+          items:
+            type: string
+          description: Causal parent event IDs (DAG edges).
+        ts_hint:
+          type: integer
+          description: Non-authoritative client-declared timestamp.
+        edited:
+          type: boolean
+        redacted:
+          type: boolean
+
+    SendMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+        reply_to:
+          type: string
+          description: Optional parent event_id for thread replies.
+
+    SendMessageResponse:
+      type: object
+      required: [event_id, ts_hint]
+      properties:
+        event_id:
+          type: string
+        ts_hint:
+          type: integer
+
+    ReactRequest:
+      type: object
+      required: [emoji]
+      properties:
+        emoji:
+          type: string
+
+    EditMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+
+    # ── Members ─────────────────────────────────────────────────────
+
+    InviteMemberRequest:
+      type: object
+      required: [address, role]
+      properties:
+        address:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+
+    ChangeRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+
+    # ── Files ───────────────────────────────────────────────────────
+
+    UploadFileResponse:
+      type: object
+      required: [event_id, file_id, filename, size, mime_type]
+      properties:
+        event_id:
+          type: string
+        file_id:
+          type: string
+        filename:
+          type: string
+        size:
+          type: integer
+        mime_type:
+          type: string
+
+    # ── Peers ───────────────────────────────────────────────────────
+
+    PeerInfo:
+      type: object
+      required: [node_id, addr, pubkey, node_type]
+      properties:
+        node_id:
+          type: string
+          description: Hex-encoded 160-bit node ID.
+        addr:
+          type: string
+          description: "`host:port`."
+        pubkey:
+          type: string
+          description: "`ed25519:BASE64URL`."
+        node_type:
+          $ref: "#/components/schemas/NodeType"
+        rtt_ms:
+          type: integer
+        last_seen:
+          type: integer
+
+    PeersResponse:
+      type: object
+      required: [status, bootstrapped, peer_count, routing_table, peers]
+      properties:
+        status:
+          type: string
+          enum: [online, offline, bootstrapping]
+        bootstrapped:
+          type: boolean
+        peer_count:
+          type: integer
+        routing_table:
+          type: object
+          required: [bucket_count, known_nodes]
+          properties:
+            bucket_count:
+              type: integer
+            known_nodes:
+              type: integer
+        peers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeerInfo"
+
+    RendezvousNode:
+      type: object
+      required: [addr, pubkey, status, source]
+      properties:
+        addr:
+          type: string
+        pubkey:
+          type: string
+        status:
+          type: string
+          enum: [reachable, unreachable, unknown]
+        last_seen:
+          type: integer
+        source:
+          type: string
+          enum: [builtin, config, cli]
+
+    RendezvousResponse:
+      type: object
+      required: [rendezvous]
+      properties:
+        rendezvous:
+          type: array
+          items:
+            $ref: "#/components/schemas/RendezvousNode"
+
+    # ── WebSocket messages ──────────────────────────────────────────
+
+    # Client → Server
+
+    WsSubscribe:
+      type: object
+      required: [type, room_ids]
+      description: Sent by the client to subscribe to room events.
+      properties:
+        type:
+          type: string
+          const: subscribe
+        room_ids:
+          type: array
+          items:
+            type: string
+
+    WsUnsubscribe:
+      type: object
+      required: [type, room_ids]
+      description: Sent by the client to unsubscribe from rooms.
+      properties:
+        type:
+          type: string
+          const: unsubscribe
+        room_ids:
+          type: array
+          items:
+            type: string
+
+    # Server → Client
+
+    WsNewMessage:
+      type: object
+      required: [type, room_id, event_id, kind, content, ts_hint]
+      properties:
+        type:
+          type: string
+          const: new_message
+        room_id:
+          type: string
+        event_id:
+          type: string
+        author:
+          type: string
+        kind:
+          $ref: "#/components/schemas/EventKind"
+        content:
+          type: object
+          additionalProperties: true
+        ts_hint:
+          type: integer
+
+    WsMessageEdited:
+      type: object
+      required: [type, room_id, event_id, original_event_id, content]
+      properties:
+        type:
+          type: string
+          const: message_edited
+        room_id:
+          type: string
+        event_id:
+          type: string
+        original_event_id:
+          type: string
+        content:
+          type: object
+          additionalProperties: true
+
+    WsMessageDeleted:
+      type: object
+      required: [type, room_id, event_id, original_event_id]
+      properties:
+        type:
+          type: string
+          const: message_deleted
+        room_id:
+          type: string
+        event_id:
+          type: string
+        original_event_id:
+          type: string
+
+    WsReaction:
+      type: object
+      required: [type, room_id, event_id, target_event_id, author, emoji]
+      properties:
+        type:
+          type: string
+          const: reaction
+        room_id:
+          type: string
+        event_id:
+          type: string
+        target_event_id:
+          type: string
+        author:
+          type: string
+        emoji:
+          type: string
+
+    WsPresenceUpdate:
+      type: object
+      required: [type, room_id, address, status, last_active]
+      properties:
+        type:
+          type: string
+          const: presence_update
+        room_id:
+          type: string
+        address:
+          type: string
+        status:
+          $ref: "#/components/schemas/PresenceStatus"
+        last_active:
+          type: integer
+
+    WsMemberJoined:
+      type: object
+      required: [type, room_id, address, role]
+      properties:
+        type:
+          type: string
+          const: member_joined
+        room_id:
+          type: string
+        address:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+
+    WsMemberLeft:
+      type: object
+      required: [type, room_id, address]
+      properties:
+        type:
+          type: string
+          const: member_left
+        room_id:
+          type: string
+        address:
+          type: string
+
+    WsRoomUpdated:
+      type: object
+      required: [type, room_id, changes]
+      properties:
+        type:
+          type: string
+          const: room_updated
+        room_id:
+          type: string
+        changes:
+          type: object
+          additionalProperties: true
+
+    WsSyncStatus:
+      type: object
+      required: [type, room_id, status, progress]
+      properties:
+        type:
+          type: string
+          const: sync_status
+        room_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/SyncStatus"
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1

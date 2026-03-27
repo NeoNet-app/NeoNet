@@ -1,0 +1,46 @@
+[package]
+name = "neonet-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NeoNet node daemon — REST API + WebSocket + QUIC networking"
+
+[[bin]]
+name = "neonet"
+path = "src/main.rs"
+
+[dependencies]
+neonet-core = { workspace = true }
+neonet-crypto = { workspace = true }
+neonet-proto = { workspace = true }
+
+actix-web = { workspace = true }
+actix-ws = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+argon2 = { workspace = true }
+zeroize = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+thiserror = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true }
+rusqlite = { workspace = true }
+quinn = { workspace = true }
+rcgen = { workspace = true }
+rustls = { workspace = true }
+postcard = { workspace = true }
+hkdf = { workspace = true }
+sha2 = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+rpassword = { workspace = true }
+indicatif = { workspace = true }
+colored = { workspace = true }
+comfy-table = { workspace = true }

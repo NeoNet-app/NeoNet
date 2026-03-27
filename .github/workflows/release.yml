@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Read version from Cargo.toml ─────────────────────────────────
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version
+        id: ver
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name=="neonet-node") | .version')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+  # ── Build binaries (3 targets) ───────────────────────────────────
+  build-macos-arm:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - name: Build
+        run: cargo build --release --bin neonet --target aarch64-apple-darwin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neonet-aarch64-apple-darwin
+          path: target/aarch64-apple-darwin/release/neonet
+
+  build-linux-arm64:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Build
+        run: cross build --release --bin neonet --target aarch64-unknown-linux-musl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neonet-aarch64-unknown-linux-musl
+          path: target/aarch64-unknown-linux-musl/release/neonet
+
+  build-linux-x86:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Build
+        run: cross build --release --bin neonet --target x86_64-unknown-linux-musl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neonet-x86_64-unknown-linux-musl
+          path: target/x86_64-unknown-linux-musl/release/neonet
+
+  # ── Build & push Docker images ───────────────────────────────────
+  docker:
+    needs: [version, build-linux-x86]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - name: neonet-rendezvous
+            context: docker/rendezvous
+          - name: neonet-relay
+            context: docker/relay
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: neonet-x86_64-unknown-linux-musl
+          path: docker/bin
+
+      - name: Make binary executable
+        run: chmod +x docker/bin/neonet
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.context }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:v${{ needs.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Create GitHub Release ────────────────────────────────────────
+  release:
+    needs: [version, build-macos-arm, build-linux-arm64, build-linux-x86, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Rename binaries
+        run: |
+          cd artifacts
+          for dir in neonet-*; do
+            mv "$dir/neonet" "../$dir"
+            chmod +x "../$dir"
+          done
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: NeoNet v${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          body: |
+            ## Binaries
+
+            | Platform | Download |
+            |----------|----------|
+            | macOS ARM (Apple Silicon) | `neonet-aarch64-apple-darwin` |
+            | Linux ARM64 | `neonet-aarch64-unknown-linux-musl` |
+            | Linux x86_64 | `neonet-x86_64-unknown-linux-musl` |
+
+            ## Docker images
+
+            ```bash
+            # Rendezvous node
+            docker pull ghcr.io/${{ github.repository_owner }}/neonet-rendezvous:v${{ needs.version.outputs.version }}
+
+            # Relay node
+            docker pull ghcr.io/${{ github.repository_owner }}/neonet-relay:v${{ needs.version.outputs.version }}
+            ```
+
+            See `docker/rendezvous/README.md` and `docker/relay/README.md` for deployment guides.
+          files: |
+            neonet-aarch64-apple-darwin
+            neonet-aarch64-unknown-linux-musl
+            neonet-x86_64-unknown-linux-musl

@@ -1,0 +1,16 @@
+[package]
+name = "neonet-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core types for NeoNet: Event, CrdtState, Identity, Room, Sync"
+
+[dependencies]
+neonet-crypto = { workspace = true }
+serde = { workspace = true }
+postcard = { workspace = true }
+crdts = { workspace = true }
+bloomfilter = { workspace = true }
+lru = { workspace = true }
+rusqlite = { workspace = true }
+thiserror = { workspace = true }

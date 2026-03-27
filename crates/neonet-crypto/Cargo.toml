@@ -1,0 +1,15 @@
+[package]
+name = "neonet-crypto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cryptographic primitives for NeoNet: Ed25519, X25519, Blake3, ChaCha20-Poly1305"
+
+[dependencies]
+ed25519-dalek = { workspace = true }
+x25519-dalek = { workspace = true }
+blake3 = { workspace = true }
+chacha20poly1305 = { workspace = true }
+serde = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
