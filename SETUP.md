@@ -5,28 +5,9 @@
 
 ### 1. Installer NeoNet
 
-#### macOS ARM
-```bash
-curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-aarch64-apple-darwin \
-  -o neonet
-chmod +x neonet
-sudo mv neonet /usr/local/bin/
-neonet --version
-```
+download: [github.com/NeoNet-app/NeoNet/releases](https://github.com/NeoNet-app/NeoNet/releases)
 
-#### Linux x86_64
 ```bash
-curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-x86_64-unknown-linux-musl \
-  -o neonet
-chmod +x neonet
-sudo mv neonet /usr/local/bin/
-neonet --version
-```
-
-#### Linux ARM64
-```bash
-curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-aarch64-unknown-linux-musl \
-  -o neonet
 chmod +x neonet
 sudo mv neonet /usr/local/bin/
 neonet --version
