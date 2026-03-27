@@ -197,8 +197,8 @@ nano .env
 
 # Initialiser le keystore (une seule fois)
 docker run --rm -it \
-  -v neonet-rdv-data:/data \
-  -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
+  -v neonet-rdv-data:/.neonet \
+  --env-file .env \
   ghcr.io/neonet-app/neonet-rendezvous:latest \
   init
 
@@ -228,10 +228,10 @@ nano .env
 
 # Initialiser le keystore (une seule fois)
 docker run --rm -it \
-  -v neonet-relay-data:/data \
-  -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
+  -v neonet-relay-data:/.neonet \
+  --env-file .env \
   ghcr.io/neonet-app/neonet-relay:latest \
-  init --domain neonet.alice.com
+  init
 
 # Demarrer
 docker compose up -d

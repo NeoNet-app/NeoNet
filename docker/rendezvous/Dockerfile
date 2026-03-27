@@ -22,6 +22,7 @@ COPY --from=builder /build/docker/rendezvous/config.toml /etc/neonet/config.toml
 EXPOSE 7777/udp
 VOLUME /data
 
+ENV HOME="/data"
 ENV NEONET_PASSPHRASE=""
 ENV NEONET_LOG="info"
 ENV NEONET_LISTEN_PORT="7777"

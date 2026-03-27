@@ -16,8 +16,9 @@ nano .env
 ### 2. Initialize the keystore
 
 ```bash
-docker run --rm -it -v neonet-rdv-data:/data \
-  -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
+docker run --rm -it \
+  -v neonet-rdv-data:/.neonet \
+  --env-file .env \
   ghcr.io/neonet-app/neonet-rendezvous:latest \
   init
 ```

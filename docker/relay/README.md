@@ -19,10 +19,11 @@ nano .env
 ### 2. Initialize the keystore
 
 ```bash
-docker run --rm -it -v neonet-relay-data:/data \
-  -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
+docker run --rm -it \
+  -v neonet-relay-data:/.neonet \
+  --env-file .env \
   ghcr.io/neonet-app/neonet-relay:latest \
-  init --domain "$NEONET_DOMAIN"
+  init
 ```
 
 ### 3. Start
