@@ -2,8 +2,8 @@
 
 **Protocole de communication decentralise, privacy-first, ecrit en Rust.**
 
-[![Build](https://img.shields.io/github/actions/workflow/status/NeoNet/NeoNet/release.yml?label=build)](https://github.com/NeoNet/NeoNet/actions)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/NeoNet/NeoNet/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/NeoNet/NeoNet/release.yml?label=build)](https://github.com/NeoNet-app/NeoNet/actions)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/NeoNet-app/NeoNet/releases)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-lightgrey)]()
 
@@ -102,22 +102,22 @@ peuvent dechiffrer le contenu.
 
 ```bash
 # macOS ARM (Apple Silicon)
-curl -L https://github.com/NeoNet/NeoNet/releases/latest/download/neonet-aarch64-apple-darwin -o neonet
+curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-aarch64-apple-darwin -o neonet
 chmod +x neonet && sudo mv neonet /usr/local/bin/
 
 # Linux x86_64
-curl -L https://github.com/NeoNet/NeoNet/releases/latest/download/neonet-x86_64-unknown-linux-musl -o neonet
+curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-x86_64-unknown-linux-musl -o neonet
 chmod +x neonet && sudo mv neonet /usr/local/bin/
 
 # Linux ARM64
-curl -L https://github.com/NeoNet/NeoNet/releases/latest/download/neonet-aarch64-unknown-linux-musl -o neonet
+curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-aarch64-unknown-linux-musl -o neonet
 chmod +x neonet && sudo mv neonet /usr/local/bin/
 ```
 
 ### Depuis les sources
 
 ```bash
-git clone https://github.com/NeoNet/NeoNet
+git clone https://github.com/NeoNet-app/NeoNet
 cd NeoNet
 cargo build --release
 sudo cp target/release/neonet /usr/local/bin/
@@ -195,7 +195,7 @@ neonet start --mode client \
 #### Etape 1 -- Monter le rendezvous (VPS 1)
 
 ```bash
-git clone https://github.com/NeoNet/NeoNet
+git clone https://github.com/NeoNet-app/NeoNet
 cd NeoNet/docker/rendezvous
 
 # Configurer
@@ -487,7 +487,7 @@ Pour les installations binaires :
 
 ```bash
 # Telecharger la derniere release
-curl -L https://github.com/NeoNet/NeoNet/releases/latest/download/neonet-x86_64-unknown-linux-musl -o neonet
+curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-x86_64-unknown-linux-musl -o neonet
 chmod +x neonet && sudo mv neonet /usr/local/bin/
 
 # Redemarrer le daemon

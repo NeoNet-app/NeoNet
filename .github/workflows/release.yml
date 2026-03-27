@@ -9,6 +9,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
 
 jobs:
   # ── Read version from Cargo.toml ─────────────────────────────────
@@ -94,6 +96,9 @@ jobs:
       - name: Make binary executable
         run: chmod +x docker/bin/neonet
 
+      - name: Lowercase owner
+        run: echo "OWNER_LC=${IMAGE_OWNER,,}" >> "$GITHUB_ENV"
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -108,8 +113,8 @@ jobs:
           file: ${{ matrix.image.context }}/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:v${{ needs.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:latest
+            ghcr.io/${{ env.OWNER_LC }}/${{ matrix.image.name }}:v${{ needs.version.outputs.version }}
+            ghcr.io/${{ env.OWNER_LC }}/${{ matrix.image.name }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -132,6 +137,9 @@ jobs:
             chmod +x "../$dir"
           done
 
+      - name: Lowercase owner
+        run: echo "OWNER_LC=${IMAGE_OWNER,,}" >> "$GITHUB_ENV"
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -151,10 +159,10 @@ jobs:
 
             ```bash
             # Rendezvous node
-            docker pull ghcr.io/${{ github.repository_owner }}/neonet-rendezvous:v${{ needs.version.outputs.version }}
+            docker pull ghcr.io/${{ env.OWNER_LC }}/neonet-rendezvous:v${{ needs.version.outputs.version }}
 
             # Relay node
-            docker pull ghcr.io/${{ github.repository_owner }}/neonet-relay:v${{ needs.version.outputs.version }}
+            docker pull ghcr.io/${{ env.OWNER_LC }}/neonet-relay:v${{ needs.version.outputs.version }}
             ```
 
             See `docker/rendezvous/README.md` and `docker/relay/README.md` for deployment guides.
