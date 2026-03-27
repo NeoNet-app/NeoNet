@@ -26,4 +26,5 @@ ENV NEONET_PASSPHRASE=""
 ENV NEONET_LOG="info"
 ENV NEONET_LISTEN_PORT="7777"
 
-ENTRYPOINT ["/neonet", "start", "--mode", "rendezvous", "--config", "/etc/neonet/config.toml"]
+ENTRYPOINT ["/neonet"]
+CMD ["start", "--mode", "rendezvous", "--config", "/etc/neonet/config.toml"]

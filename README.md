@@ -200,7 +200,7 @@ docker run --rm -it \
   -v neonet-rdv-data:/data \
   -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
   ghcr.io/neonet-app/neonet-rendezvous:latest \
-  /neonet init
+  init
 
 # Demarrer
 docker compose up -d
@@ -231,7 +231,7 @@ docker run --rm -it \
   -v neonet-relay-data:/data \
   -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
   ghcr.io/neonet-app/neonet-relay:latest \
-  /neonet init --domain neonet.alice.com
+  init --domain neonet.alice.com
 
 # Demarrer
 docker compose up -d

@@ -22,7 +22,7 @@ nano .env
 docker run --rm -it -v neonet-relay-data:/data \
   -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
   ghcr.io/neonet-app/neonet-relay:latest \
-  /neonet init --domain "$NEONET_DOMAIN"
+  init --domain "$NEONET_DOMAIN"
 ```
 
 ### 3. Start
