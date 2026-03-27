@@ -127,7 +127,18 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: neonet-aarch64-apple-darwin
+          path: artifacts/neonet-aarch64-apple-darwin
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: neonet-aarch64-unknown-linux-musl
+          path: artifacts/neonet-aarch64-unknown-linux-musl
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: neonet-x86_64-unknown-linux-musl
+          path: artifacts/neonet-x86_64-unknown-linux-musl
 
       - name: Rename binaries
         run: |
