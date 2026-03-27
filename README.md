@@ -2,7 +2,7 @@
 
 **Protocole de communication decentralise, privacy-first, ecrit en Rust.**
 
-[![Build](https://img.shields.io/github/actions/workflow/status/NeoNet/NeoNet/release.yml?label=build)](https://github.com/NeoNet-app/NeoNet/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/NeoNet-app/NeoNet/release.yml?label=build)](https://github.com/NeoNet-app/NeoNet/actions)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/NeoNet-app/NeoNet/releases)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux-lightgrey)]()
@@ -100,17 +100,9 @@ peuvent dechiffrer le contenu.
 
 ### Depuis les releases (recommande)
 
+https://github.com/NeoNet-app/NeoNet/releases
+
 ```bash
-# macOS ARM (Apple Silicon)
-curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-aarch64-apple-darwin -o neonet
-chmod +x neonet && sudo mv neonet /usr/local/bin/
-
-# Linux x86_64
-curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-x86_64-unknown-linux-musl -o neonet
-chmod +x neonet && sudo mv neonet /usr/local/bin/
-
-# Linux ARM64
-curl -L https://github.com/NeoNet-app/NeoNet/releases/latest/download/neonet-aarch64-unknown-linux-musl -o neonet
 chmod +x neonet && sudo mv neonet /usr/local/bin/
 ```
 
@@ -127,10 +119,10 @@ sudo cp target/release/neonet /usr/local/bin/
 
 ```bash
 # Rendezvous
-docker pull ghcr.io/neonet/neonet-rendezvous:latest
+docker pull ghcr.io/neonet-app/neonet-rendezvous:latest
 
 # Relay
-docker pull ghcr.io/neonet/neonet-relay:latest
+docker pull ghcr.io/neonet-app/neonet-relay:latest
 ```
 
 Voir [`docker/rendezvous/README.md`](docker/rendezvous/README.md) et
@@ -207,7 +199,7 @@ nano .env
 docker run --rm -it \
   -v neonet-rdv-data:/data \
   -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
-  ghcr.io/neonet/neonet-rendezvous:latest \
+  ghcr.io/neonet-app/neonet-rendezvous:latest \
   /neonet init
 
 # Demarrer
@@ -238,7 +230,7 @@ nano .env
 docker run --rm -it \
   -v neonet-relay-data:/data \
   -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
-  ghcr.io/neonet/neonet-relay:latest \
+  ghcr.io/neonet-app/neonet-relay:latest \
   /neonet init --domain neonet.alice.com
 
 # Demarrer

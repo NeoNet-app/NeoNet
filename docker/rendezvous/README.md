@@ -18,7 +18,7 @@ nano .env
 ```bash
 docker run --rm -it -v neonet-rdv-data:/data \
   -e NEONET_PASSPHRASE="$NEONET_PASSPHRASE" \
-  ghcr.io/neonet/neonet-rendezvous:latest \
+  ghcr.io/neonet-app/neonet-rendezvous:latest \
   /neonet init
 ```
 

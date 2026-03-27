@@ -1,6 +1,6 @@
 services:
   neonet-relay:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-neonet}/neonet-relay:latest
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-neonet-app}/neonet-relay:latest
     container_name: neonet-relay
     restart: unless-stopped
     ports:

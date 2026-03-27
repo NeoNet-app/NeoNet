@@ -1,6 +1,6 @@
 services:
   neonet-rendezvous:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-neonet}/neonet-rendezvous:latest
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-neonet-app}/neonet-rendezvous:latest
     container_name: neonet-rendezvous
     restart: unless-stopped
     ports:
