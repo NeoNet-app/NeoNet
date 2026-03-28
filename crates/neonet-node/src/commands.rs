@@ -88,7 +88,7 @@ pub fn cmd_init(domain: Option<String>, _passphrase_env: bool) -> ExitCode {
 // ── start (mode-aware) ───────────────────────────────────────────────
 
 pub fn cmd_start(
-    _daemon: bool,
+    daemon: bool,
     mode: Option<String>,
     domain: Option<String>,
     api_port: Option<u16>,
@@ -150,7 +150,11 @@ pub fn cmd_start(
         return ExitCode::from(EXIT_KEYSTORE_MISSING);
     }
 
-    let passphrase = keystore::get_passphrase("Passphrase : ");
+    // If spawned as daemon child, passphrase is passed via env var.
+    let passphrase = std::env::var("NEONET_PASSPHRASE_UNLOCKED")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| keystore::get_passphrase("Passphrase : "));
     if passphrase.is_empty() {
         eprintln!("{} Passphrase required.", "Error:".red().bold());
         return ExitCode::from(EXIT_BAD_PASSPHRASE);
@@ -163,6 +167,39 @@ pub fn cmd_start(
             return ExitCode::from(EXIT_BAD_PASSPHRASE);
         }
     };
+
+    // ── Daemonize (Unix only) ─────────────────────────────────────────
+    // Fork AFTER reading the passphrase so the terminal is still available
+    // for the prompt; the parent exits immediately, the child continues.
+    #[cfg(unix)]
+    if daemon {
+        use std::os::unix::process::CommandExt;
+        let child = std::process::Command::new(
+            std::env::current_exe().unwrap_or_else(|_| "neonet".into()),
+        )
+        .args(std::env::args_os().skip(1).filter(|a| a != "--daemon"))
+        // Pass the passphrase via env var so the child doesn't prompt again.
+        .env("NEONET_PASSPHRASE_UNLOCKED", &passphrase)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .process_group(0)   // detach from parent's process group
+        .spawn();
+        match child {
+            Ok(c) => {
+                println!("Daemon démarré (PID {})", c.id());
+                return ExitCode::from(EXIT_OK);
+            }
+            Err(e) => {
+                eprintln!("{} fork: {e}", "Error:".red().bold());
+                return ExitCode::from(EXIT_ERROR);
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    if daemon {
+        eprintln!("{} --daemon non supporté sur cette plateforme, lancement en foreground", "Warning:".yellow().bold());
+    }
 
     println!("{}", "NeoNet daemon v0.1.0".bold());
     println!("{}", "────────────────────".dimmed());
