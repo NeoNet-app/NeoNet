@@ -20,7 +20,7 @@ nano .env
 
 ```bash
 docker run --rm -it \
-  -v neonet-relay-data:/.neonet \
+  -v neonet-relay-data:/data \
   --env-file .env \
   ghcr.io/neonet-app/neonet-relay:latest \
   init

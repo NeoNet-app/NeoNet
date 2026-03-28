@@ -17,7 +17,7 @@ nano .env
 
 ```bash
 docker run --rm -it \
-  -v neonet-rdv-data:/.neonet \
+  -v neonet-rdv-data:/data \
   --env-file .env \
   ghcr.io/neonet-app/neonet-rendezvous:latest \
   init

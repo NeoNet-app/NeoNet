@@ -6,7 +6,7 @@ services:
     ports:
       - "7777:7777/udp"
     volumes:
-      - neonet-relay-data:/.neonet
+      - neonet-relay-data:/data
     environment:
       - NEONET_PASSPHRASE=${NEONET_PASSPHRASE}
       - NEONET_DOMAIN=${NEONET_DOMAIN}
@@ -15,4 +15,5 @@ services:
 
 volumes:
   neonet-relay-data:
+    external: true
     name: neonet-relay-data

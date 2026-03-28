@@ -235,7 +235,7 @@ ufw allow 7777/udp
 
 # Initialiser le keystore (une seule fois — génère l'identité Ed25519)
 docker run --rm -it \
-  -v neonet-rdv-data:/.neonet \
+  -v neonet-rdv-data:/data \
   --env-file .env \
   ghcr.io/neonet-app/neonet-rendezvous:latest \
   init
@@ -277,7 +277,7 @@ ufw allow 7777/udp
 
 # Initialiser le keystore (une seule fois)
 docker run --rm -it \
-  -v neonet-relay-data:/.neonet \
+  -v neonet-relay-data:/data \
   --env-file .env \
   ghcr.io/neonet-app/neonet-relay:latest \
   init
