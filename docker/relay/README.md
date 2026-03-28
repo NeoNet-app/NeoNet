@@ -11,19 +11,16 @@ relays can discover it by domain name.
 ```bash
 cp .env.example .env
 nano .env
+# NEONET_PASSPHRASE  = strong passphrase for the keystore
 # NEONET_DOMAIN      = your public domain (e.g. neonet.example.com)
 # NEONET_RENDEZVOUS  = rendezvous server address (e.g. 1.2.3.4:7777)
-# NEONET_PASSPHRASE  = strong passphrase for the keystore
 ```
 
-### 2. Initialize the keystore
+### 2. DNS
 
-```bash
-docker run --rm -it \
-  -v neonet-relay-data:/data \
-  --env-file .env \
-  ghcr.io/neonet-app/neonet-relay:latest \
-  init
+Point your domain to this server's public IP:
+```
+neonet.example.com.  A  <YOUR_SERVER_IP>
 ```
 
 ### 3. Start
@@ -32,42 +29,60 @@ docker run --rm -it \
 docker compose up -d
 ```
 
+That's it. On first start, if no keystore is found in `./neonetconf/`,
+the container automatically initialises a new Ed25519 identity using
+`NEONET_PASSPHRASE` and `NEONET_DOMAIN` from the `.env` file.
+
 ### 4. Verify
 
 ```bash
 docker compose logs -f
-```
-
-You should see:
-```
-Enregistre sur <rendezvous> comme <domain>
-Daemon pret.
+# → Auto-init : keystore créé
+# → Enregistré sur <rendezvous> comme <domain>
+# → Daemon prêt.
 ```
 
 ## Firewall
 
-Open UDP port 7777 (QUIC).
-
-## DNS
-
-Point your domain to the server's public IP:
-```
-neonet.example.com.  A  <YOUR_SERVER_IP>
+```bash
+ufw allow 7777/udp
 ```
 
-## Volumes
+## Data
+
+Identity and database are stored in `./neonetconf/` next to the `docker-compose.yml`.
+Back up this directory to preserve your node identity.
 
 | Path | Content |
 |------|---------|
-| `/data/keystore/` | Ed25519 identity (encrypted with passphrase) |
-| `/data/neonet.db` | TOFU peer database |
+| `./neonetconf/.neonet/keystore/` | Ed25519 identity (encrypted with passphrase) |
+| `./neonetconf/.neonet/neonet.db` | TOFU peer database |
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEONET_PASSPHRASE` | Yes | Keystore passphrase |
+| `NEONET_PASSPHRASE` | Yes | Keystore passphrase (also used for auto-init) |
 | `NEONET_DOMAIN` | Yes | Public domain for this relay |
 | `NEONET_RENDEZVOUS` | Yes | Rendezvous server `host:port` (comma-separated for multiple) |
 | `NEONET_LOG` | No | Log level (`error`, `warn`, `info`, `debug`, `trace`) |
 | `NEONET_LISTEN_PORT` | No | QUIC listen port (default: 7777) |
+
+## Useful Commands
+
+```bash
+# Logs
+docker compose logs -f
+
+# Show node identity
+docker exec neonet-relay /neonet identity show
+
+# List connected peers
+docker exec neonet-relay /neonet peers list
+
+# Update to latest version
+docker compose pull && docker compose up -d
+
+# Stop
+docker compose down
+```

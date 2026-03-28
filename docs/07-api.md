@@ -622,15 +622,31 @@ log_level    = "info"
 keystore     = "~/.neonet/keystore"        # clé privée chiffrée Argon2id
 
 [network]
+mode         = "client"                    # client | relay | rendezvous | full
 listen_port  = 7777                        # port QUIC entrant
-rendezvous   = [                           # listes rendezvous supplémentaires
-  "https://exemple.com/.neonet/rendezvous.toml"
-]
+relay        = ""                          # adresse du relay (mode client)
+rendezvous   = []                          # adresses rendezvous (mode relay)
+domain       = ""                          # domaine public (mode relay)
 
 [storage]
 db_path      = "~/.neonet/neonet.db"       # SQLite
 max_db_size  = "10GB"
 ```
+
+**Fichiers générés par le daemon :**
+
+| Fichier | Description |
+|---|---|
+| `~/.neonet/session.token` | Token Bearer courant (chmod 600, renouvelé à chaque démarrage) |
+| `~/.neonet/daemon.pid` | PID du daemon background (créé avec `--daemon`) |
+| `~/.neonet/daemon.log` | Logs du daemon background (créé avec `--daemon`) |
+
+> **Docker** : avec `ENV HOME=/data`, tous ces chemins deviennent `/data/.neonet/…`.
+> Le bind mount `./neonetconf:/data` dans docker-compose suffit à tout persister.
+
+**Rotation du token :** le token est régénéré à chaque démarrage du daemon.
+Les apps clientes doivent relire `session.token` après un redémarrage.
+Le token est trimé (sans `\n` final) — toujours utiliser la valeur exacte du fichier.
 
 ---
 
@@ -644,6 +660,8 @@ max_db_size  = "10GB"
 | `tokio` | Runtime async |
 | `uuid` | Génération du session token |
 | `argon2` | Dérivation de clé pour le keystore |
+| `reqwest` | Client HTTP pour `neonet status` |
+| `libc` | SIGTERM Unix pour `neonet stop` |
 
 ---
 
@@ -655,6 +673,7 @@ max_db_size  = "10GB"
 | Port défaut | `127.0.0.1:7780` |
 | Auth | Bearer token, fichier `~/.neonet/session.token` chmod 600 |
 | Rotation token | À chaque démarrage du daemon |
+| Token format | UUID v4, trimé sans `\n`, valide tant que le daemon tourne |
 | Scopes | Aucun pour l'instant — open bar localhost |
 | Déchiffrement | Côté daemon — l'app reçoit du JSON clair |
 | Clé privée | Jamais exposée — opérations via `/v1/identity/sign` |

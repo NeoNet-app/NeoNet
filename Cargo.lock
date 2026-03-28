@@ -1794,6 +1794,7 @@ dependencies = [
  "env_logger",
  "hkdf",
  "indicatif",
+ "libc",
  "log",
  "neonet-core",
  "neonet-crypto",

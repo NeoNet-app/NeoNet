@@ -146,6 +146,16 @@ impl Config {
     pub fn session_token_path() -> PathBuf {
         Self::base_dir().join("session.token")
     }
+
+    /// Daemon PID file path.
+    pub fn pid_path() -> PathBuf {
+        Self::base_dir().join("daemon.pid")
+    }
+
+    /// Daemon log file path.
+    pub fn log_path() -> PathBuf {
+        Self::base_dir().join("daemon.log")
+    }
 }
 
 fn dirs_home() -> PathBuf {

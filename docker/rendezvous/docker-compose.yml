@@ -6,12 +6,7 @@ services:
     ports:
       - "7777:7777/udp"
     volumes:
-      - neonet-rdv-data:/data
+      - ./neonetconf:/data
     environment:
       - NEONET_PASSPHRASE=${NEONET_PASSPHRASE}
       - NEONET_LOG=${NEONET_LOG:-info}
-
-volumes:
-  neonet-rdv-data:
-    external: true
-    name: neonet-rdv-data

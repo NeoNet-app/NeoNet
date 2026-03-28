@@ -6,6 +6,48 @@ info:
     Local REST + WebSocket API exposed by the `neonet-node` daemon on
     `127.0.0.1:7780` (default).
 
+    ## Authentication
+
+    All endpoints (except `/v1/health`) require a Bearer token.
+    The token is generated at daemon startup and written to
+    `~/.neonet/session.token` (chmod 600). It is rotated on every restart.
+
+    Read the token with:
+    ```bash
+    TOKEN=$(cat ~/.neonet/session.token)
+    curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7780/v1/identity
+    ```
+
+    **Important:** always trim the token value — no trailing newline.
+
+    ## Daemon modes
+
+    The daemon operates in one of four modes set at startup:
+
+    | Mode | Description |
+    |------|-------------|
+    | `client` | Laptop/desktop — connects to a relay VPS |
+    | `relay` | VPS — federates with other relays, routes messages |
+    | `rendezvous` | VPS — ephemeral directory for relay discovery |
+    | `full` | Combined relay + client (single-machine setups) |
+
+    ## Auto-init (Docker)
+
+    If `NEONET_PASSPHRASE` is set in the environment and no keystore exists,
+    the daemon auto-initialises on first start using `NEONET_DOMAIN` as the
+    domain hint. No manual `init` step required.
+
+    ## Data files
+
+    | File | Description |
+    |------|-------------|
+    | `~/.neonet/session.token` | Current Bearer token |
+    | `~/.neonet/daemon.pid` | PID of background daemon (`--daemon`) |
+    | `~/.neonet/daemon.log` | Logs of background daemon (`--daemon`) |
+    | `~/.neonet/neonet.db` | SQLite — TOFU peers, rooms, messages |
+
+    > With Docker (`ENV HOME=/data`), all paths are under `/data/.neonet/`.
+
     The daemon decrypts all payloads — client apps receive clear JSON and
     never handle cryptographic keys directly.
   license:
@@ -20,6 +62,8 @@ security:
   - BearerToken: []
 
 tags:
+  - name: Daemon
+    description: Daemon health and status.
   - name: Identity
     description: Local node identity and signing.
   - name: Rooms
@@ -31,7 +75,7 @@ tags:
   - name: Files
     description: Encrypted file upload and download.
   - name: Peers
-    description: Connected peers and DHT state.
+    description: Connected peers and network state.
   - name: WebSocket
     description: Real-time event streaming.
 
@@ -39,6 +83,36 @@ tags:
 # Paths
 # ─────────────────────────────────────────────────────────────────────
 paths:
+
+  # ── Daemon ──────────────────────────────────────────────────────────
+
+  /v1/health:
+    get:
+      operationId: getHealth
+      tags: [Daemon]
+      summary: Daemon health check (no auth required).
+      description: |
+        Returns 200 if the daemon is running. Does not require a Bearer token.
+        Useful for readiness checks and monitoring.
+      security: []
+      responses:
+        "200":
+          description: Daemon is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: "0.1.0"
+                  mode:
+                    type: string
+                    enum: [client, relay, rendezvous, full]
+                    example: client
 
   # ── Identity ────────────────────────────────────────────────────────
 
@@ -550,7 +624,15 @@ components:
       scheme: bearer
       description: |
         Session token generated at daemon startup and written to
-        `~/.neonet/session.token` (chmod 600). Rotated on every restart.
+        `~/.neonet/session.token` (chmod 600). Rotated on every daemon restart.
+
+        Read with: `TOKEN=$(cat ~/.neonet/session.token)`
+
+        **Important:** trim the value — the file may contain a trailing newline.
+        Always use `$TOKEN` directly, never `cat` inline in the header string.
+
+        A 401 response means the token is stale (daemon was restarted).
+        Reread the file and retry.
 
   # ── Parameters ──────────────────────────────────────────────────────
   parameters:

@@ -44,3 +44,6 @@ rpassword = { workspace = true }
 indicatif = { workspace = true }
 colored = { workspace = true }
 comfy-table = { workspace = true }
+
+# Unix
+libc = { workspace = true }

@@ -6,14 +6,9 @@ services:
     ports:
       - "7777:7777/udp"
     volumes:
-      - neonet-relay-data:/data
+      - ./neonetconf:/data
     environment:
       - NEONET_PASSPHRASE=${NEONET_PASSPHRASE}
       - NEONET_DOMAIN=${NEONET_DOMAIN}
       - NEONET_RENDEZVOUS=${NEONET_RENDEZVOUS}
       - NEONET_LOG=${NEONET_LOG:-info}
-
-volumes:
-  neonet-relay-data:
-    external: true
-    name: neonet-relay-data

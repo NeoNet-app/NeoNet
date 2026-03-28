@@ -144,10 +144,47 @@ pub fn cmd_start(
 
     let node_mode = cfg.network.mode.clone();
 
-    // Check keystore.
+    // Auto-init: if no keystore but NEONET_PASSPHRASE is set, init silently.
+    // This allows Docker containers to bootstrap on first start without a
+    // separate `docker exec neonet init` step.
     if !keystore::keystore_exists() {
-        eprintln!("{} Aucun keystore trouvé. Lancez: {}", "Error:".red().bold(), "neonet init".bold());
-        return ExitCode::from(EXIT_KEYSTORE_MISSING);
+        let auto_passphrase = std::env::var("NEONET_PASSPHRASE")
+            .ok()
+            .filter(|s| !s.is_empty());
+        if let Some(pp) = auto_passphrase {
+            let auto_domain = std::env::var("NEONET_DOMAIN")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .or_else(|| if cfg.network.domain.is_empty() { None } else { Some(cfg.network.domain.clone()) });
+            log::info!("Keystore absent — auto-init (NEONET_PASSPHRASE est défini)");
+            let _ = std::fs::create_dir_all(Config::base_dir());
+            match keystore::create_keystore(pp.as_bytes()) {
+                Ok(vk) => {
+                    let pubkey_str = neonet_crypto::encode_verifying_key(&vk);
+                    let pubkey_short = pubkey_str.strip_prefix("ed25519:").unwrap_or(&pubkey_str);
+                    let address = match &auto_domain {
+                        Some(d) => format!("@{pubkey_short}:{d}"),
+                        None    => format!("@{pubkey_short}"),
+                    };
+                    eprintln!("Auto-init : keystore créé");
+                    eprintln!("Adresse   : {address}");
+                    let config_path_auto = Config::base_dir().join("config.toml");
+                    if !config_path_auto.exists() {
+                        let _ = fs::write(
+                            &config_path_auto,
+                            toml::to_string_pretty(&cfg).unwrap_or_default(),
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} Auto-init échoué : {e}", "Error:".red().bold());
+                    return ExitCode::from(EXIT_ERROR);
+                }
+            }
+        } else {
+            eprintln!("{} Aucun keystore trouvé. Lancez: {}", "Error:".red().bold(), "neonet init".bold());
+            return ExitCode::from(EXIT_KEYSTORE_MISSING);
+        }
     }
 
     // If spawned as daemon child, passphrase is passed via env var.
@@ -174,6 +211,21 @@ pub fn cmd_start(
     #[cfg(unix)]
     if daemon {
         use std::os::unix::process::CommandExt;
+
+        let _ = std::fs::create_dir_all(Config::base_dir());
+        let log_path = Config::base_dir().join("daemon.log");
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .unwrap_or_else(|_| {
+                // fallback: /tmp
+                std::fs::File::create("/tmp/neonet-daemon.log").expect("log fallback")
+            });
+        let log_file2 = log_file.try_clone().unwrap_or_else(|_| {
+            std::fs::OpenOptions::new().append(true).open(&log_path).expect("log clone")
+        });
+
         let child = std::process::Command::new(
             std::env::current_exe().unwrap_or_else(|_| "neonet".into()),
         )
@@ -181,13 +233,17 @@ pub fn cmd_start(
         // Pass the passphrase via env var so the child doesn't prompt again.
         .env("NEONET_PASSPHRASE_UNLOCKED", &passphrase)
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdout(log_file)
+        .stderr(log_file2)
         .process_group(0)   // detach from parent's process group
         .spawn();
         match child {
             Ok(c) => {
-                println!("Daemon démarré (PID {})", c.id());
+                let pid = c.id();
+                // Write PID file so `neonet stop` can find the process.
+                let _ = std::fs::write(Config::pid_path(), pid.to_string());
+                println!("Daemon démarré (PID {pid})");
+                println!("Logs    : {}", log_path.display());
                 return ExitCode::from(EXIT_OK);
             }
             Err(e) => {
@@ -339,13 +395,62 @@ fn api_url_from(cli_url: Option<&str>) -> String {
 }
 
 fn read_session_token() -> Option<String> {
-    std::fs::read_to_string(Config::session_token_path()).ok()
+    std::fs::read_to_string(Config::session_token_path())
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
-pub fn cmd_stop(api_url: Option<&str>) -> ExitCode {
-    let _url = api_url_from(api_url);
-    eprintln!("neonet stop: not yet implemented");
-    ExitCode::from(EXIT_ERROR)
+pub fn cmd_stop(_api_url: Option<&str>) -> ExitCode {
+    let pid_path = Config::pid_path();
+
+    let pid_str = match std::fs::read_to_string(&pid_path) {
+        Ok(s) => s.trim().to_string(),
+        Err(_) => {
+            eprintln!("{} Aucun daemon en cours (PID file introuvable : {})",
+                "Error:".red().bold(), pid_path.display());
+            return ExitCode::from(EXIT_DAEMON_NOT_RUNNING);
+        }
+    };
+
+    let pid: u32 = match pid_str.parse() {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("{} PID file corrompu : {pid_str}", "Error:".red().bold());
+            let _ = std::fs::remove_file(&pid_path);
+            return ExitCode::from(EXIT_ERROR);
+        }
+    };
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        // Send SIGTERM
+        let result = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        if result == 0 {
+            println!("Daemon arrêté (PID {pid})");
+            let _ = std::fs::remove_file(&pid_path);
+            let _ = std::fs::remove_file(Config::session_token_path());
+            ExitCode::from(EXIT_OK)
+        } else {
+            let err = std::io::Error::last_os_error();
+            if err.raw_os_error() == Some(libc::ESRCH) {
+                // Process doesn't exist anymore — clean up stale files
+                eprintln!("{} Le daemon (PID {pid}) n'est plus en cours — nettoyage", "Warning:".yellow().bold());
+                let _ = std::fs::remove_file(&pid_path);
+                let _ = std::fs::remove_file(Config::session_token_path());
+                ExitCode::from(EXIT_OK)
+            } else {
+                eprintln!("{} kill({pid}): {err}", "Error:".red().bold());
+                ExitCode::from(EXIT_ERROR)
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        eprintln!("neonet stop: non supporté sur cette plateforme");
+        ExitCode::from(EXIT_ERROR)
+    }
 }
 
 pub fn cmd_status(api_url: Option<&str>, json: bool) -> ExitCode {
@@ -372,11 +477,26 @@ pub fn cmd_status(api_url: Option<&str>, json: bool) -> ExitCode {
                 println!("{}", "Daemon en cours".green().bold());
                 if let Ok(pk) = keystore::read_public_key() { println!("Identité: {}", pk.cyan()); }
                 println!("API     : {}", url.green());
+                println!("Logs    : {}", Config::base_dir().join("daemon.log").display().to_string().dimmed());
             }
             ExitCode::from(EXIT_OK)
         }
-        _ => {
-            eprintln!("{} Daemon non joignable sur {url}", "Error:".red().bold());
+        Ok(resp) if resp.status() == 401 => {
+            eprintln!("{} Token périmé — relancer le daemon pour régénérer le token", "Error:".red().bold());
+            eprintln!("  Token lu depuis : {}", Config::session_token_path().display());
+            ExitCode::from(EXIT_DAEMON_NOT_RUNNING)
+        }
+        Ok(resp) => {
+            eprintln!("{} Réponse inattendue du daemon : HTTP {}", "Error:".red().bold(), resp.status());
+            ExitCode::from(EXIT_DAEMON_NOT_RUNNING)
+        }
+        Err(e) if e.is_connect() => {
+            eprintln!("{} Daemon non joignable sur {url} (connexion refusée)", "Error:".red().bold());
+            eprintln!("  Lancer : neonet start --mode client --relay <addr> --daemon");
+            ExitCode::from(EXIT_DAEMON_NOT_RUNNING)
+        }
+        Err(e) => {
+            eprintln!("{} Erreur réseau : {e}", "Error:".red().bold());
             ExitCode::from(EXIT_DAEMON_NOT_RUNNING)
         }
     }
@@ -526,9 +646,86 @@ pub fn cmd_rendezvous(action: RendezvousAction) -> ExitCode {
     ExitCode::from(EXIT_ERROR)
 }
 
-pub fn cmd_logs(_level: Option<String>, _since: Option<String>, _no_follow: bool) -> ExitCode {
-    eprintln!("neonet logs: not yet implemented");
-    ExitCode::from(EXIT_ERROR)
+pub fn cmd_logs(level: Option<String>, _since: Option<String>, no_follow: bool) -> ExitCode {
+    let log_path = Config::base_dir().join("daemon.log");
+
+    if !log_path.exists() {
+        eprintln!("{} Aucun fichier de log trouvé : {}", "Error:".red().bold(), log_path.display());
+        eprintln!("  Le daemon a-t-il été démarré avec --daemon ?");
+        return ExitCode::from(EXIT_ERROR);
+    }
+
+    // Filter by level if requested (best-effort grep on log lines)
+    let level_filter = level.as_deref().unwrap_or("").to_uppercase();
+
+    if no_follow {
+        // Print existing content and exit
+        match std::fs::read_to_string(&log_path) {
+            Ok(content) => {
+                for line in content.lines() {
+                    if level_filter.is_empty() || line.to_uppercase().contains(&level_filter) {
+                        println!("{line}");
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("{} Lecture du log : {e}", "Error:".red().bold());
+                return ExitCode::from(EXIT_ERROR);
+            }
+        }
+        return ExitCode::from(EXIT_OK);
+    }
+
+    // Follow mode: print existing content then tail new lines
+    println!("{} {} (Ctrl+C pour quitter)", "Suivi de".dimmed(), log_path.display().to_string().dimmed());
+
+    let file = match std::fs::File::open(&log_path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("{} {e}", "Error:".red().bold());
+            return ExitCode::from(EXIT_ERROR);
+        }
+    };
+
+    use std::io::{BufRead, BufReader, Seek, SeekFrom};
+    let mut reader = BufReader::new(file);
+
+    // Print existing content
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {
+                let trimmed = line.trim_end();
+                if level_filter.is_empty() || trimmed.to_uppercase().contains(&level_filter) {
+                    println!("{trimmed}");
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    // Tail new lines
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                // Re-seek to end of current content in case file was rotated
+                let _ = reader.seek(SeekFrom::Current(0));
+            }
+            Ok(_) => {
+                let trimmed = line.trim_end();
+                if level_filter.is_empty() || trimmed.to_uppercase().contains(&level_filter) {
+                    println!("{trimmed}");
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    ExitCode::from(EXIT_OK)
 }
 
 pub fn cmd_config(action: ConfigAction) -> ExitCode {
